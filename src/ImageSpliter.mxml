@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+					   xmlns:s="library://ns.adobe.com/flex/spark"
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   width="640" height="480" backgroundColor="#D2CBCB"
+					   creationComplete="facade.startup(this)">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.containers.Canvas;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.graphics.BitmapFillMode;
+			import mx.managers.PopUpManager;
+			
+			import org.jack.puremvc.imageSpliter.ApplicationFacade;
+			import org.jack.puremvc.imageSpliter.model.vo.ImageVO;
+			
+			private var facade:ApplicationFacade = ApplicationFacade.getInstance();
+			
+			public var voImage:ImageVO = new ImageVO();
+			private var fileRef:FileReference;
+			private var timeout:uint;
+			
+			public function getImageVO():void
+			{
+				voImage.name = fileRef.name;
+				voImage.exportFolder = exportFolderTxt.text;
+				voImage.splitRow = int(splitRowTxt.text);
+				voImage.splitCol = int(splitColTxt.text);
+			}
+			
+			public function splitStart():void
+			{
+				updateSplitImageContainer();
+			}
+			
+			public function splitFinish():void
+			{
+				var a:Alert = Alert.show("Split successful", "Split successful", 4, this);
+				PopUpManager.centerPopUp(a);
+			}
+			
+			private function updateSplitImageContainer():void
+			{
+				var obmd:BitmapData = voImage.originalBitmapData;
+				var row:int = voImage.splitRow;
+				var col:int = voImage.splitCol;
+				var pw:int = voImage.previewWidth/row;
+				var ph:int = voImage.previewHeight/col;
+				
+				var bm:Bitmap;
+				
+				for (var i:int = 0; i < row; i++) 
+				{
+					for (var j:int = 0; j < col; j++) 
+					{
+						bm = new Bitmap(voImage.splitBitmapDataList[i*col+j], "auto", true);
+						bm.x = i*pw + i*5;
+						bm.y = j*ph + j*5;
+						bm.x += (originalImage.x + originalImage.width + 20);
+						bm.y += originalImage.y;
+						bm.width = pw;
+						bm.height = ph;
+						stage.addChild(bm);
+					}
+				}
+			}
+			
+			protected function selectExportFolderBtn_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var file:File = new File();
+				file.addEventListener(Event.SELECT, onExportFolderSelected);
+				file.browseForDirectory("Please select a Export target folder...");
+			}
+			
+			protected function executeBtn_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				dispatchEvent(new Event(ApplicationFacade.SPLIT_START));
+			}
+			
+			protected function selectImageBtn_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				fileRef = new FileReference();
+				
+				fileRef.addEventListener(Event.SELECT, onFileSelect);
+				fileRef.addEventListener(Event.COMPLETE, onFileLoadComplete);
+				
+				var imageTypeFilter:FileFilter = new FileFilter("Images ((*.jpg, *.jpeg, *.gif, *.png)", "*.jpg;*.jpeg;*.png;*.gif");
+				fileRef.browse([imageTypeFilter]);
+			}
+			
+			protected function onExportFolderSelected(event:Event):void
+			{
+				// TODO Auto-generated method stub
+				var file:File = File(event.target);
+				exportFolderTxt.text = file.nativePath;
+			}
+			
+			protected function onFileLoadComplete(event:Event):void
+			{
+				// TODO Auto-generated method stub
+				clearTimeout(timeout);
+				
+				var data:ByteArray = fileRef.data;
+				
+				var loader:Loader = new Loader();
+				loader.contentLoaderInfo.addEventListener(Event.COMPLETE, onLoadImageComplete);
+				loader.loadBytes(data);
+			}
+			
+			protected function onLoadImageComplete(event:Event):void
+			{
+				// TODO Auto-generated method stub
+				voImage.originalBitmapData = ((event.target as LoaderInfo).loader.content as Bitmap).bitmapData;
+				
+				if(voImage.originalBitmapData.width <= originalImage.width && voImage.originalBitmapData.height <= originalImage.height)
+				{
+					voImage.previewWidth = voImage.originalBitmapData.width;
+					voImage.previewHeight = voImage.originalBitmapData.height;
+					
+					originalImage.fillMode = BitmapFillMode.CLIP;
+				}
+				else
+				{
+					if(voImage.originalBitmapData.width > voImage.originalBitmapData.height)
+					{
+						voImage.previewWidth = originalImage.width;
+						voImage.previewHeight = voImage.originalBitmapData.height*(originalImage.width/voImage.originalBitmapData.width);
+					}
+					else
+					{
+						voImage.previewHeight = originalImage.height;
+						voImage.previewWidth = voImage.originalBitmapData.width*(originalImage.height/voImage.originalBitmapData.height);
+					}
+					
+					originalImage.fillMode = BitmapFillMode.SCALE;
+				}
+				
+				originalImage.smooth = true;
+				originalImage.source = (event.target as LoaderInfo).loader;
+				originalImage.invalidateSize();
+				
+				dispatchEvent(new Event(ApplicationFacade.IMAGE_LOAD_COMPLETE));
+			}
+			
+			protected function onFileSelect(event:Event):void
+			{
+				// TODO Auto-generated method stub
+				timeout = setTimeout(loadImage, 200);
+			}		
+			
+			private function loadImage():void
+			{
+				fileRef.load();
+			}
+
+			
+		]]>
+	</fx:Script>
+	
+	<s:Image id="originalImage" x="10" y="37" width="300" height="300"/>
+	<s:Button id="selectImageBtn" x="6" y="8" label="Open" click="selectImageBtn_clickHandler(event)"/>
+	<s:Label x="30" y="358" text="Row"/>
+	<s:TextInput id="splitRowTxt" x="78" y="348" text="1"/>
+	<s:Label x="32" y="411" text="Col"/>
+	<s:TextInput id="splitColTxt" x="79" y="399" text="1"/>
+	<s:Button id="selectExportFolderBtn" x="541" y="401" label="Select"
+			  click="selectExportFolderBtn_clickHandler(event)"/>
+	<s:Label x="255" y="381" text="Export target folder"/>
+	<s:TextInput id="exportFolderTxt" x="255" y="399" width="278"/>
+	<s:Button id="executeBtn" x="118" y="8" label="Execute" click="executeBtn_clickHandler(event)"
+			  enabled="true"/>
+	<mx:Canvas id="splitImageComtainer" x="315" y="39" width="300" height="300">
+	</mx:Canvas>
+</s:WindowedApplication>
